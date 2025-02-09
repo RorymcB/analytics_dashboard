@@ -1,0 +1,16 @@
+Project Outline
+
+Aims
+Create a dashboard with dash that can plot different data
+and use a chatGPT api to answer questions or perform analysis of the data.
+Also enable the uploading of data from csv files and storing my own financial data
+and also other gathered data in a database.
+
+Data
+1. Verbraucherprieisindex
+2. Currencies
+3. eCoins
+4. Markets
+5. My own data
+
+

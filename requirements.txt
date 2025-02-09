@@ -1,0 +1,13 @@
+cryptography
+dash
+flask
+flask-login
+flask-mail
+flask-sqlalchemy
+gunicorn
+plotly
+pymysql
+pandas
+openai
+alpha-vantage
+python-dotenv  # Load .env variables
