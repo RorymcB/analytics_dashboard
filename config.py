@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+import logging
 
 load_dotenv()  # Load .env variables into environment
 
@@ -24,3 +25,23 @@ DB_NAME = "dashboard_db"
 
 SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
+
+# Configure logging to also print to console
+# logging.basicConfig(
+#     filename="app.log",
+#     level=logging.DEBUG,
+#     format="%(asctime)s - %(levelname)s - %(message)s",
+#     handlers=[
+#         logging.FileHandler("app.log"),  # ✅ Log to file
+#         logging.StreamHandler()  # ✅ Log to console
+#     ]
+# )
+# Configure logging correctly
+logging.basicConfig(
+    level=logging.DEBUG,  # ✅ Set log level
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("app.log"),  # ✅ Log to file
+        logging.StreamHandler()  # ✅ Log to console
+    ]
+)

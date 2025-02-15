@@ -1,4 +1,4 @@
-from flask import Flask, redirect
+from flask import Flask, redirect, session
 import dash
 from flask_mail import Mail
 from layout import get_layout
@@ -9,7 +9,12 @@ from config import MAIL_USERNAME, MAIL_PASSWORD
 
 # Create Flask App
 server = Flask(__name__)
-server.config["SECRET_KEY"] = "supersecretkey"
+server.secret_key = "supersecretkey"
+
+# ✅ Enable server-side session storage
+server.config["SESSION_TYPE"] = "filesystem"
+server.config["SESSION_PERMANENT"] = False
+server.config["SESSION_COOKIE_NAME"] = "flask_session"
 
 # Email Configuration
 server.config["MAIL_SERVER"] = "smtp.gmail.com"
@@ -23,7 +28,7 @@ server.config["MAIL_DEFAULT_SENDER"] = "noreply@analytics-dashboard.com"
 mail.init_app(server)  # ✅ Fix: Initialize Flask-Mail
 init_db(server)
 login_manager.init_app(server)
-server.register_blueprint(auth_bp)
+server.register_blueprint(auth_bp, url_prefix="/auth")
 
 # Create Dash App
 app = dash.Dash(__name__, server=server, routes_pathname_prefix="/dashboard/")
@@ -36,6 +41,11 @@ register_callbacks(app, server)
 @server.route("/")
 def index():
     return redirect("/dashboard/")
+
+@server.route("/session_debug")
+def session_debug():
+    return str(session.items())  # ✅ Print all session data
+
 
 if __name__ == '__main__':
     server.run(host='0.0.0.0', port=8050, debug=True)

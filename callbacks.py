@@ -1,14 +1,19 @@
+import logging
 from dash import Output, Input, State, html
 import plotly.graph_objs as go
-import openai
+from openai import OpenAI
 from data_fetching import fetch_stock_data
 from config import apikeys
 from database import db
 from models import ChatMessage
 from flask import session, current_app
 from flask_login import current_user
+from data_fetching import fetch_historical_stock_data
+from layout import get_layout, get_navbar
+from alpha_vantage.timeseries import TimeSeries
 
 chatgpt_api_key = apikeys["chatgpt"]
+alpha_vantage_api_key = apikeys["alpha_vantage"]
 
 def register_callbacks(app, server):
     """Register Dash callbacks for stock chart, chat AI, and dark mode toggle."""
@@ -19,26 +24,36 @@ def register_callbacks(app, server):
         Input("stock-dropdown", "value")
     )
     def update_stock_chart(symbol):
-        """Update stock chart based on selected stock."""
-        df_stock = fetch_stock_data(symbol)
-        figure = {
-            'data': [
-                go.Scatter(
-                    x=df_stock.index,
-                    y=df_stock["Close"],
-                    mode='lines',
-                    name=symbol
-                )
-            ],
-            'layout': go.Layout(
-                title=f"Stock Price Over Time ({symbol})",
-                xaxis={'title': "Date"},
-                yaxis={'title': "Closing Price (USD)"},
-                hovermode='closest'
-            )
-        }
-        return figure
+        """Fetch stock price data from Alpha Vantage."""
+        ts = TimeSeries(key=alpha_vantage_api_key, output_format="pandas")
+        try:
+            data, meta_data = ts.get_daily(symbol=symbol, outputsize="compact")
+            data = data.rename(columns={"4. close": "Close"})
+            data.index = data.index.astype(str)  # Convert index to string for plotting
 
+            return {
+                'data': [
+                    go.Scatter(
+                        x=data.index,
+                        y=data["Close"],
+                        mode='lines',
+                        name=symbol
+                    )
+                ],
+                'layout': go.Layout(
+                    title=f"Stock Price Over Time ({symbol})",
+                    xaxis={'title': "Date"},
+                    yaxis={'title': "Closing Price (USD)"},
+                    hovermode='closest'
+                )
+            }
+        except Exception as e:
+            return {
+                'data': [],
+                'layout': go.Layout(title=f"Error: {e}")
+            }
+
+    client = OpenAI(api_key=chatgpt_api_key)  # ✅ Initialize OpenAI Client
     # Register Dash callbacks including user-based chat storage.
     @app.callback(
         Output("chat-response", "children"),
@@ -47,6 +62,7 @@ def register_callbacks(app, server):
         State("chat-input", "value"),
         prevent_initial_call=True
     )
+
     def chat_with_gpt(n_clicks, user_input):
         """Send user input to ChatGPT and update chat history."""
         with server.app_context():  # ✅ Ensure we're in Flask context
@@ -55,11 +71,11 @@ def register_callbacks(app, server):
 
             user_id = session["user_id"]
             try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-4-mini",
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
                     messages=[{"role": "user", "content": user_input}]
                 )
-                bot_response = response['choices'][0]['message']['content']
+                bot_response = response.choices[0].message.content
 
                 chat_message = ChatMessage(user_id=user_id, user_message=user_input, bot_response=bot_response)
                 db.session.add(chat_message)
@@ -94,18 +110,64 @@ def register_callbacks(app, server):
     # Update navbar with login/out
     @app.callback(
         Output("navbar", "children"),
+        [Input("progress-interval", "n_intervals"),
+        Input("login-state-update", "data")]
+    )
+    def update_navbar(n_intervals):
+        logging.info(f"Navbar update triggered! Current session: {session.items()}")
+        """Update navbar dynamically to reflect login/logout status."""
+        user_id = session.get("user_id")
+        if user_id:
+            logging.info(f"Updating navbar for logged-in user: {session.get('username')}")
+            return get_navbar()
+        else:
+            logging.info("Updating navbar for guest user.")
+            return get_navbar()
+
+    @app.callback(
+        Output("admin-panel", "children"),
         Input("theme-store", "data")
     )
-    def update_navbar(_):
-        """Update navbar with login/logout buttons."""
-        with server.app_context():  # ✅ Ensure we're in Flask context
-            if "user_id" in session:  # ✅ Check if a user is logged in
-                return html.Div([
-                    html.Span(f"Welcome, {session['username']}!", className="user-greeting"),
-                    html.A("Logout", href="/logout", className="logout-button")
-                ], className="navbar-container")
-            else:
-                return html.Div([
-                    html.A("Login", href="/login", className="login-button"),
-                    html.A("Register", href="/register", className="register-button")
-                ], className="navbar-container")
+    def show_admin_panel(_):
+        if session.get("user_id") and session.get("is_admin"):
+            return html.Div([
+                html.H2("🔧 Admin Panel"),
+                html.P("Manage users, chats, and settings here."),
+            ])
+        return html.Div()
+
+
+    @app.callback(
+        Output("fetch-status", "children"),
+        Input("fetch-button", "n_clicks"),
+        State("stock-input", "value"),
+        prevent_initial_call=True
+    )
+    def fetch_stock_data(n_clicks, symbol):
+        """Fetch historical stock data when the button is clicked."""
+        if not symbol:
+            return "Please enter a stock symbol."
+
+        with server.app_context():
+            session["progress"] = "Starting fetch..."
+            session["cancel_fetch"] = False  # ✅ Reset cancel flag
+            fetch_historical_stock_data(symbol.upper())
+            return session.get("progress", "Fetching data...")
+
+    @app.callback(
+        Output("fetch-status", "children"),
+        Input("progress-interval", "n_intervals")
+    )
+    def update_progress(n_intervals):
+        """Update the fetch progress display."""
+        return session.get("progress", "Waiting for request...")
+
+    @app.callback(
+        Output("fetch-status", "children"),
+        Input("cancel-button", "n_clicks"),
+        prevent_initial_call=True
+    )
+    def cancel_fetch(n_clicks):
+        """Cancel the stock data fetching process."""
+        session["cancel_fetch"] = True  # ✅ Set cancel flag
+        return "Fetching canceled by user."

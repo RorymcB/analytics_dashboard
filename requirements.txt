@@ -11,3 +11,4 @@ pandas
 openai
 alpha-vantage
 python-dotenv  # Load .env variables
+yfinance

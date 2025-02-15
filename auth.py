@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, redirect, request, session, url_for, flash
+import logging
+from flask import Blueprint, render_template, redirect, request, session, url_for, flash, jsonify
 from flask_mail import Mail, Message
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
@@ -7,14 +8,14 @@ from models import User
 from config import MAIL_USERNAME, MAIL_PASSWORD
 from werkzeug.security import generate_password_hash, check_password_hash
 
-auth_bp = Blueprint("auth", __name__)
+auth_bp = Blueprint("auth", __name__, template_folder="templates")
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
 
 # Flask-Mail Setup
-mail = Mail()
-s = URLSafeTimedSerializer("supersecretkey")
+mail = Mail()  # ✅ Fix: Define Flask-Mail object
+s = URLSafeTimedSerializer("supersecretkey") #ToDo
 
 
 @login_manager.user_loader
@@ -25,6 +26,8 @@ def load_user(user_id):
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     """User login route."""
+    logging.info("Accessed /login route")  # ✅ Log login page access
+
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
@@ -32,9 +35,14 @@ def login():
 
         if user and check_password_hash(user.password, password):
             login_user(user)
-            session["user_id"] = user.id  # ✅ Store user ID in session
-            session["username"] = user.username  # ✅ Store username in session
+            session["user_id"] = user.id
+            session["username"] = user.username
+            session["is_admin"] = user.is_admin
+            logging.info(f"User {username} logged in successfully.")
             return redirect("/dashboard/")
+        else:
+            logging.warning(f"Failed login attempt for username: {username}")
+            return "Invalid login credentials. Try again."
 
     return render_template("login.html")
 
@@ -42,10 +50,15 @@ def login():
 @login_required
 def logout():
     """User logout route."""
-    logout_user()
-    session.pop("user_id", None)  # ✅ Remove user from session
-    session.pop("username", None)
-    return redirect("/")
+    try:
+        username = session.get("username", "Unknown")
+        logout_user()  # ✅ Correct Flask-Login logout function
+        session.clear()  # ✅ Ensures all session data is removed
+        logging.info(f"User {username} logged out.")
+        return redirect("/auth/login")  # ✅ Redirect to login page after logout
+    except Exception as e:
+        logging.error(f"Error logging out: {e}")
+        return "Error logging out", 500
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
@@ -127,3 +140,16 @@ def reset_password(token):
         return render_template("reset_password.html")
     except SignatureExpired:
         return "The password reset link has expired!"
+
+@auth_bp.route("/admin_dashboard")
+@login_required
+def admin_dashboard():
+    """Admin-only dashboard."""
+    if not session.get("is_admin"):
+        return "Access Denied: Admins only!", 403
+    return render_template("admin_dashboard.html")
+
+@auth_bp.route("/set_login_state", methods=["POST"])
+def set_login_state():
+    """Force Dash to recognize login state changes."""
+    return jsonify({"status": "success"})
