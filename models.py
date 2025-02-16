@@ -21,12 +21,27 @@ class ChatMessage(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Stock(db.Model):
-    """Stores stock data."""
+    """Stores stock metadata."""
     id = db.Column(db.Integer, primary_key=True)
     symbol = db.Column(db.String(10), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
+    exchange = db.Column(db.String(50), nullable=True)
 
 class UserStock(db.Model):
     """Tracks which users are following which stocks (Many-to-Many)."""
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
     stock_id = db.Column(db.Integer, db.ForeignKey('stock.id'), primary_key=True)
+
+
+class StockPrice(db.Model):
+    """Stores historical stock prices."""
+    id = db.Column(db.Integer, primary_key=True)
+    stock_id = db.Column(db.Integer, db.ForeignKey('stock.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    open_price = db.Column(db.Float, nullable=True)
+    high_price = db.Column(db.Float, nullable=True)
+    low_price = db.Column(db.Float, nullable=True)
+    close_price = db.Column(db.Float, nullable=False)
+    volume = db.Column(db.Integer, nullable=True)
+
+    stock = db.relationship("Stock", backref="prices")

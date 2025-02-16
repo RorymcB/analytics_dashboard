@@ -9,7 +9,12 @@ from config import MAIL_USERNAME, MAIL_PASSWORD
 
 # Create Flask App
 server = Flask(__name__)
-server.config["SECRET_KEY"] = "supersecretkey"
+server.secret_key = "supersecretkey"
+
+# ✅ Enable server-side session storage
+server.config["SESSION_TYPE"] = "filesystem"
+server.config["SESSION_PERMANENT"] = False
+server.config["SESSION_COOKIE_NAME"] = "flask_session"
 
 # Email Configuration
 server.config["MAIL_SERVER"] = "smtp.gmail.com"

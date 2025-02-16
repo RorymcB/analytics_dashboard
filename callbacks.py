@@ -1,6 +1,7 @@
+import logging
 from dash import Output, Input, State, html
 import plotly.graph_objs as go
-import openai
+from openai import OpenAI
 from data_fetching import fetch_stock_data
 from config import apikeys
 from database import db
@@ -39,6 +40,7 @@ def register_callbacks(app, server):
         }
         return figure
 
+    client = OpenAI(api_key=chatgpt_api_key)  # ✅ Initialize OpenAI Client
     # Register Dash callbacks including user-based chat storage.
     @app.callback(
         Output("chat-response", "children"),
@@ -47,6 +49,7 @@ def register_callbacks(app, server):
         State("chat-input", "value"),
         prevent_initial_call=True
     )
+
     def chat_with_gpt(n_clicks, user_input):
         """Send user input to ChatGPT and update chat history."""
         with server.app_context():  # ✅ Ensure we're in Flask context
@@ -55,11 +58,11 @@ def register_callbacks(app, server):
 
             user_id = session["user_id"]
             try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-4-mini",
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
                     messages=[{"role": "user", "content": user_input}]
                 )
-                bot_response = response['choices'][0]['message']['content']
+                bot_response = response.choices[0].message.content
 
                 chat_message = ChatMessage(user_id=user_id, user_message=user_input, bot_response=bot_response)
                 db.session.add(chat_message)
