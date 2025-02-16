@@ -105,10 +105,10 @@ def register_callbacks(app, server):
             if "user_id" in session:  # ✅ Check if a user is logged in
                 return html.Div([
                     html.Span(f"Welcome, {session['username']}!", className="user-greeting"),
-                    html.A("Logout", href="/logout", className="logout-button")
+                    html.A("Logout", href="/auth/logout", className="logout-button")
                 ], className="navbar-container")
             else:
                 return html.Div([
-                    html.A("Login", href="/login", className="login-button"),
+                    html.A("Login", href="/auth/login", className="login-button"),
                     html.A("Register", href="/register", className="register-button")
                 ], className="navbar-container")

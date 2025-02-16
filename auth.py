@@ -55,7 +55,7 @@ def logout():
         logout_user()  # ✅ Correct Flask-Login logout function
         session.clear()  # ✅ Ensures all session data is removed
         logging.info(f"User {username} logged out.")
-        return redirect("/auth/login")  # ✅ Redirect to login page after logout
+        return redirect("/dashboard/")  # ✅ Redirect to dashboard after logout
     except Exception as e:
         logging.error(f"Error logging out: {e}")
         return "Error logging out", 500
