@@ -2,7 +2,7 @@ import logging
 from dash import Output, Input, State, html
 import plotly.graph_objs as go
 from openai import OpenAI
-from data_fetching import fetch_stock_data
+from data_fetching import fetch_stock_data, fetch_historical_stock_data
 from config import apikeys
 from database import db
 from models import ChatMessage
@@ -112,3 +112,18 @@ def register_callbacks(app, server):
                     html.A("Login", href="/auth/login", className="login-button"),
                     html.A("Register", href="/register", className="register-button")
                 ], className="navbar-container")
+
+    # @app.callback(
+    #     Output("fetch-status", "children"),
+    #     Input("fetch-button", "n_clicks"),
+    #     State("stock-input", "value"),
+    #     prevent_initial_call=True
+    # )
+    # def fetch_stock_data(n_clicks, symbol):
+    #     """Fetch historical stock data when the button is clicked."""
+    #     if not symbol:
+    #         return "Please enter a stock symbol."
+    #
+    #     with server.app_context():  # ✅ Ensure Flask context is available
+    #         result_message = fetch_historical_stock_data(symbol.upper())  # Convert to uppercase
+    #         return result_message

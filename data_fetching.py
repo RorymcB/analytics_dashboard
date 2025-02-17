@@ -25,43 +25,53 @@ def fetch_stock_data(symbol="AAPL"):
 
 
 def fetch_historical_stock_data(symbol):
-    """Fetch stock prices only if missing."""
-    session["progress"] = f"Checking database for {symbol}..."
+    """Fetch historical stock prices from Yahoo Finance if not already in database."""
 
+    print(f"Checking data for {symbol}...")
+
+    # Check if the stock already exists
     stock_obj = Stock.query.filter_by(symbol=symbol).first()
 
     if stock_obj:
+        # Check if data exists in stock_price table
         latest_entry = db.session.execute(
             "SELECT MAX(date) FROM stock_price WHERE stock_id = :stock_id",
             {"stock_id": stock_obj.id}
         ).scalar()
 
         if latest_entry:
-            session["progress"] = f"Data for {symbol} already exists. Skipping fetch."
-            return
+            print(f"Data for {symbol} already exists up to {latest_entry}. Skipping fetch.")
+            return f"Data for {symbol} already exists up to {latest_entry}. No new data fetched."
 
-    session["progress"] = f"Fetching data for {symbol} from Yahoo Finance..."
+    print(f"Fetching historical data for {symbol}...")
 
     stock = yf.Ticker(symbol)
     df = stock.history(period="max")
 
     if df.empty:
-        session["progress"] = f"No data found for {symbol}"
-        return
+        print(f"No data found for {symbol}")
+        return f"No data found for {symbol}"
 
+    # Store stock metadata if it doesn't exist
     if not stock_obj:
         stock_obj = Stock(symbol=symbol, name=stock.info.get("longName", symbol))
         db.session.add(stock_obj)
         db.session.commit()
 
-    from models import StockPrice
+    from models import StockPrice  # Import inside function to avoid circular imports
 
+    # Insert stock price data
     for date, row in df.iterrows():
-        volume = int(row["Volume"]) if row["Volume"] else None
+        volume = row["Volume"]
 
+        # Ensure volume is stored as an integer
+        if isinstance(volume, float) or isinstance(volume, Decimal):
+            volume = int(volume)
+
+        # ✅ Check if this date already exists in the database
         existing_entry = StockPrice.query.filter_by(stock_id=stock_obj.id, date=date.date()).first()
         if existing_entry:
-            continue
+            continue  # ✅ Skip if this date already exists
 
         price = StockPrice(
             stock_id=stock_obj.id,
@@ -75,4 +85,5 @@ def fetch_historical_stock_data(symbol):
         db.session.add(price)
 
     db.session.commit()
-    session["progress"] = f"New data for {symbol} added successfully!"
+    print(f"Data for {symbol} inserted successfully!")
+    return f"Historical data for {symbol} inserted successfully!"

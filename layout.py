@@ -46,6 +46,14 @@ def get_layout():
             # Stock Chart
             dcc.Graph(id='stock-chart', className="graph-container"),
 
+            # Stock Data Fetching Section
+            html.Div([
+                html.H3("Download Historical Stock Data"),
+                dcc.Input(id="stock-input", type="text", placeholder="Enter Stock Symbol", className="input-field"),
+                html.Button("Fetch Data", id="fetch-button", className="fetch-button"),
+                html.Div(id="fetch-status", className="status-output")  # Output field for progress
+            ], className="fetch-container"),
+
             # Chat Section
             html.Div([
                 html.H2("💬 AI Chat Assistant", className="chat-header"),
