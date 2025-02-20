@@ -1,12 +1,14 @@
 import pandas as pd
 from alpha_vantage.timeseries import TimeSeries
 from config import apikeys
-from models import Stock
+from models import Stock, StockPrice
 import yfinance as yf
 from database import db
 from decimal import Decimal
 from datetime import datetime
-from flask import session
+from flask import session, current_app
+from sqlalchemy import text
+import logging
 
 av_api_key = apikeys["alpha_vantage"]
 
@@ -35,7 +37,7 @@ def fetch_historical_stock_data(symbol):
     if stock_obj:
         # Check if data exists in stock_price table
         latest_entry = db.session.execute(
-            "SELECT MAX(date) FROM stock_price WHERE stock_id = :stock_id",
+            text("SELECT MAX(date) FROM stock_price WHERE stock_id = :stock_id"),
             {"stock_id": stock_obj.id}
         ).scalar()
 
@@ -87,3 +89,44 @@ def fetch_historical_stock_data(symbol):
     db.session.commit()
     print(f"Data for {symbol} inserted successfully!")
     return f"Historical data for {symbol} inserted successfully!"
+
+
+def get_available_stocks():
+    """Fetch unique stock symbols from the database within an app context."""
+    with current_app.app_context():  # ✅ Ensure we are inside Flask app context
+        stocks = db.session.query(Stock.symbol).distinct().all()
+
+    stock_list = [stock.symbol for stock in stocks]
+    logging.info(f"Fetched stocks: {stock_list}")  # ✅ Log stock symbols
+    return stock_list
+
+
+def fetch_local_stock_data(symbols):
+    """Fetch stock price data from the database for the given symbols."""
+    if not symbols:
+        return {}
+
+    with current_app.app_context():
+        stock_data = {}
+        for symbol in symbols:
+            stock_id = db.session.query(Stock.id).filter(Stock.symbol == symbol).scalar()
+
+            if not stock_id:
+                continue  # Skip if stock is not found
+
+            data = db.session.query(StockPrice.date, StockPrice.close_price) \
+                .filter(StockPrice.stock_id == stock_id) \
+                .order_by(StockPrice.date.asc()).all()
+
+            df = pd.DataFrame(data, columns=["Date", "Close"])
+            stock_data[symbol] = df  # ✅ Store each stock's data in a dictionary
+
+    return stock_data
+
+
+def get_available_stocks():
+    """Fetch stock symbols and names from the database within an app context."""
+    with current_app.app_context():
+        stocks = db.session.query(Stock.symbol, Stock.name).distinct().all()
+
+    return [{"label": f"{stock.name} ({stock.symbol})", "value": stock.symbol} for stock in stocks]

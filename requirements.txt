@@ -9,6 +9,7 @@ plotly
 pymysql
 pandas
 openai
+openpyxl
 alpha-vantage
 python-dotenv  # Load .env variables
 yfinance

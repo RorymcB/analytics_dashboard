@@ -1,5 +1,6 @@
 import dash
 from dash import dcc, html
+from data_fetching import get_available_stocks
 
 def get_layout():
     """Return the Dash layout with stock graphs and AI chat on one page."""
@@ -45,6 +46,20 @@ def get_layout():
 
             # Stock Chart
             dcc.Graph(id='stock-chart', className="graph-container"),
+
+            # Local Stock Data Plot Section
+            html.Div([
+                html.H3("Select Stocks to Compare"),
+                dcc.Dropdown(
+                    id="local-stock-dropdown",
+                    options=[],  # ✅ Load dynamically via callback
+                    placeholder="Select stocks",
+                    className="dropdown",
+                    multi=True  # ✅ Allow multiple selections
+                ),
+                html.Button("Refresh Dropdown", id="refresh-dropdown-btn", n_clicks=0),
+                dcc.Graph(id="local-stock-chart")
+            ], className="plot-container"),
 
             # Stock Data Fetching Section
             html.Div([

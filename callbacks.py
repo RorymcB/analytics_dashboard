@@ -2,7 +2,7 @@ import logging
 from dash import Output, Input, State, html
 import plotly.graph_objs as go
 from openai import OpenAI
-from data_fetching import fetch_stock_data, fetch_historical_stock_data
+from data_fetching import fetch_stock_data, fetch_historical_stock_data, fetch_local_stock_data, get_available_stocks
 from config import apikeys
 from database import db
 from models import ChatMessage
@@ -17,11 +17,14 @@ def register_callbacks(app, server):
     # Stock Chart Update
     @app.callback(
         Output("stock-chart", "figure"),
-        Input("stock-dropdown", "value")
+        Input("stock-dropdown", "value"),
+        prevent_initial_call=True
     )
     def update_stock_chart(symbol):
+        print('symbol =', symbol)
         """Update stock chart based on selected stock."""
-        df_stock = fetch_stock_data(symbol)
+        df_stock = fetch_stock_data(symbol=symbol)
+        df_stock.to_excel(f'df_{symbol}.xlsx')
         figure = {
             'data': [
                 go.Scatter(
@@ -113,17 +116,74 @@ def register_callbacks(app, server):
                     html.A("Register", href="/register", className="register-button")
                 ], className="navbar-container")
 
-    # @app.callback(
-    #     Output("fetch-status", "children"),
-    #     Input("fetch-button", "n_clicks"),
-    #     State("stock-input", "value"),
-    #     prevent_initial_call=True
-    # )
-    # def fetch_stock_data(n_clicks, symbol):
-    #     """Fetch historical stock data when the button is clicked."""
-    #     if not symbol:
-    #         return "Please enter a stock symbol."
-    #
-    #     with server.app_context():  # ✅ Ensure Flask context is available
-    #         result_message = fetch_historical_stock_data(symbol.upper())  # Convert to uppercase
-    #         return result_message
+    @app.callback(
+        Output("fetch-status", "children"),
+        Input("fetch-button", "n_clicks"),
+        State("stock-input", "value"),
+        prevent_initial_call=True
+    )
+    def fetch_historical_data(n_clicks, esymbol):
+        """Fetch historical stock data when the button is clicked."""
+        if not esymbol:
+            return "Please enter a stock symbol."
+
+        with server.app_context():  # ✅ Ensure Flask context is available
+            result_message = fetch_historical_stock_data(esymbol.upper())  # Convert to uppercase
+            return result_message
+
+    @app.callback(
+        Output("local-stock-chart", "figure"),
+        Input("local-stock-dropdown", "value")  # ✅ Handle multiple selections
+    )
+    def update_local_stock_chart(symbols):
+        """Update the plot when multiple stocks are selected."""
+        if not symbols:
+            return {"data": [], "layout": go.Layout(title="Select stocks to display data")}
+
+        stock_data = fetch_local_stock_data(symbols)
+
+        if not stock_data:
+            return {"data": [], "layout": go.Layout(title="No data available")}
+
+        traces = []
+        for symbol, df in stock_data.items():
+            if not df.empty:
+                traces.append(go.Scatter(
+                    x=df["Date"],
+                    y=df["Close"],
+                    mode="lines",
+                    name=symbol
+                ))
+
+        figure = {
+            "data": traces,
+            "layout": go.Layout(
+                title="Stock Price Comparison",
+                xaxis={"title": "Date"},
+                yaxis={"title": "Closing Price"},
+                hovermode="closest"
+            )
+        }
+        return figure
+
+    @app.callback(
+        Output("local-stock-dropdown", "options"),
+        Output("local-stock-dropdown", "value"),  # ✅ Preserve selected values
+        [Input("refresh-dropdown-btn", "n_clicks")],
+        [State("local-stock-dropdown", "value")]  # ✅ Store current selection
+    )
+    def populate_stock_dropdown(n_clicks, selected_symbols):
+        """Dynamically fetch stock symbols from the database while keeping selection."""
+        logging.info("Running dropdown population callback...")
+
+        stocks = get_available_stocks()
+        logging.info(f"Fetched stocks: {stocks}")
+
+        options = [{"label": stock["label"], "value": stock["value"]} for stock in stocks]
+
+        # ✅ Preserve selection if still valid
+        if selected_symbols:
+            valid_selection = [symbol for symbol in selected_symbols if symbol in [s["value"] for s in stocks]]
+            return options, valid_selection
+
+        return options, None
