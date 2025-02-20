@@ -100,21 +100,28 @@ def register_callbacks(app, server):
     # Update navbar with login/out
     @app.callback(
         Output("navbar", "children"),
-        Input("theme-store", "data")
+        Input("login-state-update", "data")  # ✅ Only updates when login state changes
     )
-    def update_navbar(_):
-        """Update navbar with login/logout buttons."""
-        with server.app_context():  # ✅ Ensure we're in Flask context
-            if "user_id" in session:  # ✅ Check if a user is logged in
-                return html.Div([
-                    html.Span(f"Welcome, {session['username']}!", className="user-greeting"),
-                    html.A("Logout", href="/auth/logout", className="logout-button")
-                ], className="navbar-container")
-            else:
-                return html.Div([
-                    html.A("Login", href="/auth/login", className="login-button"),
-                    html.A("Register", href="/register", className="register-button")
-                ], className="navbar-container")
+    def update_navbar(login_state):
+        """Update navbar dynamically when login/logout occurs."""
+        user_id = session.get("user_id")
+        is_admin = session.get("is_admin")
+
+        logging.info(f"Navbar update triggered! Session Data: {session.items()}")
+
+        if not user_id:
+            return html.Div([
+                html.A("📈 Dashboard", href="/dashboard/", className="navbar-title"),
+                html.A("Login", href="/auth/login", className="login-button"),
+                html.A("Register", href="/auth/register", className="register-button")
+            ], className="navbar")
+
+        nav_links = [html.A("📈 Dashboard", href="/dashboard/", className="navbar-title")]
+        if is_admin:
+            nav_links.append(html.A("👤 Accounts", href="/accounts", className="navbar-link"))
+        nav_links.append(html.A("Logout", href="/auth/logout", className="logout-button"))
+
+        return html.Div(nav_links, className="navbar")
 
     @app.callback(
         Output("fetch-status", "children"),

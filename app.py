@@ -15,6 +15,7 @@ server.secret_key = "supersecretkey"
 server.config["SESSION_TYPE"] = "filesystem"
 server.config["SESSION_PERMANENT"] = False
 server.config["SESSION_COOKIE_NAME"] = "flask_session"
+server.config["SESSION_REFRESH_EACH_REQUEST"] = True  # ✅ Ensures session updates on each request
 
 # Email Configuration
 server.config["MAIL_SERVER"] = "smtp.gmail.com"

@@ -153,3 +153,17 @@ def admin_dashboard():
 def set_login_state():
     """Force Dash to recognize login state changes."""
     return jsonify({"status": "success"})
+
+@auth_bp.route("/accounts")
+@login_required
+def accounts():
+    """Admin-only accounts page."""
+    if not session.get("is_admin"):
+        logging.warning(f"Unauthorized access attempt by {session.get('username', 'Unknown')}")
+        return "Access Denied: Admins only!", 403
+
+    logging.info(f"Admin {session.get('username')} accessed the Accounts page.")
+
+    accounts = User.query.all()  # ✅ Fetch all users from database
+
+    return render_template("accounts.html", accounts=accounts)

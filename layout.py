@@ -1,12 +1,21 @@
+import logging
 import dash
 from dash import dcc, html
 from data_fetching import get_available_stocks
+from flask import session
+
+def get_navbar():
+    """Return a static navbar placeholder (updated dynamically via Dash callback)."""
+    logging.info("Rendering navbar placeholder...")  # ✅ Debugging
+
+    return html.Div(id="navbar", className="navbar")  # ✅ Placeholder for dynamic navbar updates
 
 def get_layout():
     """Return the Dash layout with stock graphs and AI chat on one page."""
     return html.Div([
         # Store to Save Theme Selection
         dcc.Store(id="theme-store", data={"theme": "light"}),
+        dcc.Store(id="login-state-update"),  # ✅ Track login state manually
 
         # Dark Mode Toggle
         html.Div([
@@ -19,8 +28,8 @@ def get_layout():
             )
         ], className="theme-toggle"),
 
-        # Navigation Bar (Login / Logout)
-        html.Div(id="navbar", className="navbar"),
+        # Navigation Bar (Now Dynamic)
+        html.Div(id="navbar"),  # ✅ Navbar will update dynamically
 
         # Page Content
         html.Div([
