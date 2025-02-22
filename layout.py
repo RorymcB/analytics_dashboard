@@ -1,14 +1,28 @@
 import logging
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 from data_fetching import get_available_stocks
 from flask import session
 
 def get_navbar():
-    """Return a static navbar placeholder (updated dynamically via Dash callback)."""
-    logging.info("Rendering navbar placeholder...")  # ✅ Debugging
+    """Return a dynamic navigation bar for users and admins."""
+    user_id = session.get("user_id")
+    is_admin = session.get("is_admin")
 
-    return html.Div(id="navbar", className="navbar")  # ✅ Placeholder for dynamic navbar updates
+    logging.info(f"Navbar update triggered! Session Data: {session.items()}")
+
+    nav_links = [html.A("📈 Dashboard", href="/dashboard/", className="navbar-title")]
+
+    if user_id:
+        nav_links.append(html.A("👤 Accounts", href="/auth/accounts", className="navbar-link"))  # ✅ Now visible for all users
+        if is_admin:
+            nav_links.append(html.A("🔧 Admin Panel", href="/admin", className="navbar-link"))
+        nav_links.append(html.A("Logout", href="/auth/logout", className="logout-button"))
+    else:
+        nav_links.append(html.A("Login", href="/auth/login", className="login-button"))
+        nav_links.append(html.A("Register", href="/auth/register", className="register-button"))
+
+    return html.Div(nav_links, className="navbar")
 
 def get_layout():
     """Return the Dash layout with stock graphs and AI chat on one page."""
@@ -88,3 +102,64 @@ def get_layout():
             ], className="chat-container"),
         ], className="content-container")
     ], id="main-container")
+
+
+def get_accounts_layout():
+    """Return the Dash layout for the Accounts page."""
+    return html.Div([
+        # Back to Dashboard Link
+        html.Div([
+            html.A("⬅ Back to Dashboard", href="/dashboard/", className="back-link")
+        ], className="navigation-container"),
+
+        html.H1("🔑 User Accounts & 📊 Transaction Data", className="header"),
+
+        # Transactions Table
+        dash_table.DataTable(
+            id="accounts-table",
+            columns=[
+                {"name": "ID", "id": "id"},
+                {"name": "Username", "id": "username"},
+                {"name": "Email", "id": "email"},
+                {"name": "Role", "id": "role"}
+            ],
+            page_size=10,
+            style_table={"overflowX": "auto"},
+            style_cell={"textAlign": "left"},
+        ),
+
+        html.Button("Refresh Data", id="refresh-accounts-btn", n_clicks=0, className="refresh-button"),
+
+        html.Hr(),
+
+        html.Div(id="admin-actions", className="admin-actions"),  # ✅ Only shown for admins
+
+        # Table to display transactions
+        dash_table.DataTable(
+            id="transactions-table",
+            columns=[
+                {"name": "ID", "id": "transaction_id"},
+                {"name": "Buchungstag", "id": "Buchungstag"},
+                {"name": "Valutadatum", "id": "Valutadatum"},
+                {"name": "Beguenstigter", "id": "Beguenstigter"},
+                {"name": "IBAN", "id": "Kontonummer_IBAN"},
+                {"name": "Betrag (€)", "id": "Betrag"},
+                {"name": "Category", "id": "category"}
+            ],
+            page_size=10,
+            style_table={"overflowX": "auto"},
+            style_cell={"textAlign": "left"},
+        ),
+
+        html.Button("Refresh Transactions", id="refresh-transactions-btn", n_clicks=0, className="refresh-button"),
+
+        html.Hr(),
+
+        # Transaction Plots
+        html.H3("📈 Transaction Data Visualizations"),
+        dcc.Graph(id="line-chart"),
+        dcc.Graph(id="stacked-area-chart"),
+        dcc.Graph(id="stacked-bar-chart"),
+        dcc.Graph(id="pie-chart"),
+
+    ])

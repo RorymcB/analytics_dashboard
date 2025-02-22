@@ -1,7 +1,8 @@
 from flask import Flask, redirect, session
 import dash
 from flask_mail import Mail
-from layout import get_layout
+from flask_login import LoginManager
+from layout import get_layout, get_accounts_layout
 from callbacks import register_callbacks
 from auth import auth_bp, login_manager, mail
 from database import init_db, db
@@ -37,6 +38,16 @@ app.layout = get_layout()
 
 # Register Dash Callbacks
 register_callbacks(app, server)
+
+# Initialize Dash App for Accounts Page
+app_accounts = dash.Dash(
+    __name__,
+    server=server,
+    routes_pathname_prefix="/accounts/"  # ✅ Serve as a Dash app
+)
+
+app_accounts.layout = get_accounts_layout()  # ✅ Use Dash layout
+register_callbacks(app_accounts, server)
 
 # Redirect the root URL ("/") to the Dash app automatically
 @server.route("/")

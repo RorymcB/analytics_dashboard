@@ -1,15 +1,34 @@
 import logging
-from dash import Output, Input, State, html
+from faker import Faker
+import pandas as pd
+from dash import Output, Input, State, html, no_update, dcc
 import plotly.graph_objs as go
 from openai import OpenAI
-from data_fetching import fetch_stock_data, fetch_historical_stock_data, fetch_local_stock_data, get_available_stocks
+from data_fetching import fetch_stock_data, fetch_historical_stock_data, fetch_local_stock_data, get_available_stocks, get_all_accounts, get_transaction_data
+from plots import generate_line_chart, generate_stacked_area_chart, generate_stacked_bar_chart, generate_pie_chart
 from config import apikeys
 from database import db
-from models import ChatMessage
+from models import ChatMessage, User
 from flask import session, current_app
 from flask_login import current_user
 
 chatgpt_api_key = apikeys["chatgpt"]
+
+fake = Faker()
+
+def generate_sample_accounts():
+    """Generate fake account data for non-admin users."""
+    sample_data = [
+        {
+            "id": i + 1,
+            "username": fake.user_name(),
+            "email": fake.email(),
+            "role": "User"
+        }
+        for i in range(10)
+    ]
+    return pd.DataFrame(sample_data)
+
 
 def register_callbacks(app, server):
     """Register Dash callbacks for stock chart, chat AI, and dark mode toggle."""
@@ -48,12 +67,12 @@ def register_callbacks(app, server):
     @app.callback(
         Output("chat-response", "children"),
         Output("chat-history", "children"),
-        Input("send-button", "n_clicks"),
+        [Input("send-button", "n_clicks"), Input("chat-input", "n_submit")],  # ✅ Detect Enter key
         State("chat-input", "value"),
         prevent_initial_call=True
     )
 
-    def chat_with_gpt(n_clicks, user_input):
+    def chat_with_gpt(n_clicks, n_submit, user_input):
         """Send user input to ChatGPT and update chat history."""
         with server.app_context():  # ✅ Ensure we're in Flask context
             if not session.get("user_id"):
@@ -117,26 +136,27 @@ def register_callbacks(app, server):
             ], className="navbar")
 
         nav_links = [html.A("📈 Dashboard", href="/dashboard/", className="navbar-title")]
-        if is_admin:
-            nav_links.append(html.A("👤 Accounts", href="/accounts", className="navbar-link"))
+        # if is_admin:
+        nav_links.append(html.A("👤 Accounts", href="/accounts", className="navbar-link"))
         nav_links.append(html.A("Logout", href="/auth/logout", className="logout-button"))
 
         return html.Div(nav_links, className="navbar")
 
     @app.callback(
         Output("fetch-status", "children"),
-        Input("fetch-button", "n_clicks"),
+        [Input("fetch-button", "n_clicks"), Input("stock-input", "n_submit")],  # ✅ Add n_submit
         State("stock-input", "value"),
         prevent_initial_call=True
     )
-    def fetch_historical_data(n_clicks, esymbol):
+    def fetch_historical_data(n_clicks, n_submit, symbol):
         """Fetch historical stock data when the button is clicked."""
-        if not esymbol:
+        if not symbol:
             return "Please enter a stock symbol."
 
-        with server.app_context():  # ✅ Ensure Flask context is available
-            result_message = fetch_historical_stock_data(esymbol.upper())  # Convert to uppercase
-            return result_message
+        with server.app_context():
+            session["progress"] = "Starting fetch..."
+            fetch_historical_stock_data(symbol.upper())
+            return session.get("progress", "Fetching data...")
 
     @app.callback(
         Output("local-stock-chart", "figure"),
@@ -194,3 +214,114 @@ def register_callbacks(app, server):
             return options, valid_selection
 
         return options, None
+
+    @app.callback(
+        Output("accounts-table", "data"),
+        Input("refresh-accounts-btn", "n_clicks")
+    )
+    def refresh_accounts(n_clicks):
+        """Fetch real user accounts for admins, sample data for users."""
+        if session.get("is_admin"):
+            df = get_all_accounts()
+        else:
+            df = generate_sample_accounts()
+
+        return df.to_dict("records") if not df.empty else []
+
+    @app.callback(
+        Output("admin-actions", "children"),
+        Input("refresh-accounts-btn", "n_clicks")
+    )
+    def show_admin_controls(n_clicks):
+        """Display admin controls only if the user is an admin."""
+        if not session.get("is_admin"):
+            return ""  # ✅ Regular users see nothing
+
+        return html.Div([
+            html.Label("User ID (For Update/Delete):"),
+            dcc.Input(id="user-id-input", type="number", placeholder="Enter User ID", className="input-field"),
+
+            html.Label("New Role (Admin/User):"),
+            dcc.Dropdown(
+                id="role-dropdown",
+                options=[
+                    {"label": "Admin", "value": True},
+                    {"label": "User", "value": False}
+                ],
+                placeholder="Select role"
+            ),
+
+            html.Button("Update Role", id="update-role-btn", n_clicks=0, className="update-button"),
+            html.Button("Delete User", id="delete-user-btn", n_clicks=0, className="delete-button"),
+            html.Div(id="account-action-status", className="status-output")  # ✅ Status messages
+        ])
+
+    @app.callback(
+        Output("account-action-status", "children"),
+        [Input("update-role-btn", "n_clicks"), Input("delete-user-btn", "n_clicks")],
+        [State("user-id-input", "value"), State("role-dropdown", "value")]
+    )
+    def modify_user(n_update, n_delete, user_id, new_role):
+        """Update or delete a user account."""
+        if not session.get("is_admin"):
+            return "Access Denied: Only admins can modify accounts."
+
+        if n_update > 0:
+            if not user_id or new_role is None:
+                return "Please provide both User ID and Role to update."
+
+            with server.app_context():
+                user = User.query.get(user_id)
+                if not user:
+                    return f"User ID {user_id} not found."
+
+                user.is_admin = new_role
+                db.session.commit()
+                logging.info(f"Updated user {user.username} to {'Admin' if new_role else 'User'}.")
+                return f"User {user.username} role updated successfully."
+
+        if n_delete > 0:
+            if not user_id:
+                return "Please provide a User ID to delete."
+
+            with server.app_context():
+                user = User.query.get(user_id)
+                if not user:
+                    return f"User ID {user_id} not found."
+
+                db.session.delete(user)
+                db.session.commit()
+                logging.info(f"Deleted user {user.username}.")
+                return f"User {user.username} deleted successfully."
+
+        return no_update  # ✅ If no action is taken, keep UI unchanged
+
+    @app.callback(
+        Output("transactions-table", "data"),
+        Input("refresh-transactions-btn", "n_clicks")
+    )
+    def refresh_transactions(n_clicks):
+        """Fetch transaction data for admins and users."""
+        logging.info(f"User {session.get('username')} is fetching transaction data.")
+
+        df = get_transaction_data()
+
+        return df.to_dict("records") if not df.empty else []
+
+    @app.callback(
+        Output("line-chart", "figure"),
+        Output("stacked-area-chart", "figure"),
+        Output("stacked-bar-chart", "figure"),
+        Output("pie-chart", "figure"),
+        Input("refresh-transactions-btn", "n_clicks")
+    )
+    def update_transaction_plots(n_clicks):
+        """Update all transaction data visualizations."""
+        logging.info("Updating transaction data visualizations.")
+
+        return (
+            generate_line_chart(),
+            generate_stacked_area_chart(),
+            generate_stacked_bar_chart(),
+            generate_pie_chart()
+        )

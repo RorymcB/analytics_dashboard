@@ -228,4 +228,17 @@
     background-color: #cc0000;
 }
 
+.back-link {
+    font-size: 16px;
+    font-weight: bold;
+    color: #007bff;
+    text-decoration: none;
+    padding: 10px;
+    display: inline-block;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
 

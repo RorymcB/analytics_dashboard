@@ -1,13 +1,14 @@
 import pandas as pd
 from alpha_vantage.timeseries import TimeSeries
 from config import apikeys
-from models import Stock, StockPrice
+from models import Stock, StockPrice, User
 import yfinance as yf
 from database import db
 from decimal import Decimal
 from datetime import datetime
 from flask import session, current_app
 from sqlalchemy import text
+from yfinance.exceptions import YFRateLimitError
 import logging
 
 av_api_key = apikeys["alpha_vantage"]
@@ -29,51 +30,46 @@ def fetch_stock_data(symbol="AAPL"):
 def fetch_historical_stock_data(symbol):
     """Fetch historical stock prices from Yahoo Finance if not already in database."""
 
-    print(f"Checking data for {symbol}...")
+    session["progress"] = f"Checking database for {symbol}..."
 
-    # Check if the stock already exists
     stock_obj = Stock.query.filter_by(symbol=symbol).first()
 
     if stock_obj:
-        # Check if data exists in stock_price table
         latest_entry = db.session.execute(
             text("SELECT MAX(date) FROM stock_price WHERE stock_id = :stock_id"),
             {"stock_id": stock_obj.id}
         ).scalar()
 
         if latest_entry:
-            print(f"Data for {symbol} already exists up to {latest_entry}. Skipping fetch.")
-            return f"Data for {symbol} already exists up to {latest_entry}. No new data fetched."
+            session["progress"] = f"Data for {symbol} already exists up to {latest_entry}. Skipping fetch."
+            return
 
-    print(f"Fetching historical data for {symbol}...")
+    session["progress"] = f"Fetching historical data for {symbol}..."
 
-    stock = yf.Ticker(symbol)
-    df = stock.history(period="max")
+    try:
+        stock = yf.Ticker(symbol)
+        df = stock.history(period="max")
 
-    if df.empty:
-        print(f"No data found for {symbol}")
-        return f"No data found for {symbol}"
+        if df.empty:
+            session["progress"] = f"No data found for {symbol}."
+            return
 
-    # Store stock metadata if it doesn't exist
+    except YFRateLimitError:
+        session["progress"] = "Rate limit exceeded! Please wait and try again later."
+        logging.warning("Yahoo Finance rate limit exceeded for fetching stock data.")
+        return  # Stop processing
+
     if not stock_obj:
         stock_obj = Stock(symbol=symbol, name=stock.info.get("longName", symbol))
         db.session.add(stock_obj)
         db.session.commit()
 
-    from models import StockPrice  # Import inside function to avoid circular imports
-
-    # Insert stock price data
     for date, row in df.iterrows():
-        volume = row["Volume"]
+        volume = int(row["Volume"]) if row["Volume"] else None
 
-        # Ensure volume is stored as an integer
-        if isinstance(volume, float) or isinstance(volume, Decimal):
-            volume = int(volume)
-
-        # ✅ Check if this date already exists in the database
         existing_entry = StockPrice.query.filter_by(stock_id=stock_obj.id, date=date.date()).first()
         if existing_entry:
-            continue  # ✅ Skip if this date already exists
+            continue
 
         price = StockPrice(
             stock_id=stock_obj.id,
@@ -87,8 +83,7 @@ def fetch_historical_stock_data(symbol):
         db.session.add(price)
 
     db.session.commit()
-    print(f"Data for {symbol} inserted successfully!")
-    return f"Historical data for {symbol} inserted successfully!"
+    session["progress"] = f"Historical data for {symbol} inserted successfully!"
 
 
 def get_available_stocks():
@@ -130,3 +125,40 @@ def get_available_stocks():
         stocks = db.session.query(Stock.symbol, Stock.name).distinct().all()
 
     return [{"label": f"{stock.name} ({stock.symbol})", "value": stock.symbol} for stock in stocks]
+
+
+def get_all_accounts():
+    """Fetch all user accounts from the database."""
+    with current_app.app_context():
+        users = User.query.all()
+
+    data = [
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": "Admin" if user.is_admin else "User"
+        }
+        for user in users
+    ]
+
+    return pd.DataFrame(data)  # ✅ Convert to DataFrame for easy Dash integration
+
+def get_transaction_data():
+    """Fetch transaction data based on user role."""
+    with current_app.app_context():
+        if session.get("is_admin"):
+            query = text("SELECT * FROM sparkasse")  # ✅ Admins see real data
+        else:
+            query = text("SELECT * FROM transactions")  # ✅ Regular users see sample data
+
+        transactions = db.session.execute(query).fetchall()
+
+    if not transactions:
+        return pd.DataFrame()  # ✅ Return empty DataFrame if no data found
+
+    df = pd.DataFrame(transactions, columns=[
+        "transaction_id", "Buchungstag", "Valutadatum", "Beguenstigter", "Kontonummer_IBAN", "Betrag", "category"
+    ])
+
+    return df
