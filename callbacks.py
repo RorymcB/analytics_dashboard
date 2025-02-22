@@ -43,7 +43,7 @@ def register_callbacks(app, server):
         print('symbol =', symbol)
         """Update stock chart based on selected stock."""
         df_stock = fetch_stock_data(symbol=symbol)
-        df_stock.to_excel(f'df_{symbol}.xlsx')
+        # df_stock.to_excel(f'df_{symbol}.xlsx')
         figure = {
             'data': [
                 go.Scatter(
