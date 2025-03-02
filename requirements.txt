@@ -1,6 +1,5 @@
 cryptography
 dash
-faker
 flask
 flask-login
 flask-mail
