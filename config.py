@@ -23,8 +23,15 @@ DB_PASSWORD = "securepassword"
 DB_HOST = "localhost"
 DB_NAME = "dashboard_db"
 
+# MySQL
 SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
+
+#sqlite
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+print(BASE_DIR)
+SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/data/dashboard_dblite.db")
+SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # Configure logging to also print to console
 # logging.basicConfig(
