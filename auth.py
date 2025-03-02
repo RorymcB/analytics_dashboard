@@ -1,6 +1,5 @@
 import logging
 import pandas as pd
-from faker import Faker
 from flask import Blueprint, render_template, redirect, request, session, url_for, flash, jsonify
 from flask_mail import Mail, Message
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -12,7 +11,6 @@ from config import MAIL_USERNAME, MAIL_PASSWORD
 from werkzeug.security import generate_password_hash, check_password_hash
 
 auth_bp = Blueprint("auth", __name__, template_folder="templates")
-fake = Faker()
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
@@ -158,25 +156,25 @@ def set_login_state():
     """Force Dash to recognize login state changes."""
     return jsonify({"status": "success"})
 
-def generate_sample_accounts():
-    """Generate sample user data for non-admins."""
-    sample_data = [
-        {
-            "id": i + 1,
-            "username": fake.user_name(),
-            "email": fake.email(),
-            "role": "User"
-        }
-        for i in range(10)
-    ]
-    return pd.DataFrame(sample_data)  # ✅ Returns a Pandas DataFrame for easy handling
+# def generate_sample_accounts():
+#     """Generate sample user data for non-admins."""
+#     sample_data = [
+#         {
+#             "id": i + 1,
+#             "username": fake.user_name(),
+#             "email": fake.email(),
+#             "role": "User"
+#         }
+#         for i in range(10)
+#     ]
+#     return pd.DataFrame(sample_data)  # ✅ Returns a Pandas DataFrame for easy handling
 
 
-# @auth_bp.route("/accounts", endpoint="accounts_page")  # ✅ Unique endpoint name
-# @login_required
-# def accounts():
-#     """Render the accounts page differently for admins and users."""
-#
-#     logging.info(f"User {session.get('username')} accessed the Accounts page.")
-#
-#     return get_accounts_layout()  # ✅ Returns Dash layout for all users
+@auth_bp.route("/accounts", endpoint="accounts_page")  # ✅ Unique endpoint name
+@login_required
+def accounts():
+    """Render the accounts page differently for admins and users."""
+
+    logging.info(f"User {session.get('username')} accessed the Accounts page.")
+
+    return get_accounts_layout()  # ✅ Returns Dash layout for all users

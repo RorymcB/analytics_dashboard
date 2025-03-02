@@ -1,5 +1,4 @@
 import logging
-from faker import Faker
 import pandas as pd
 from dash import Output, Input, State, html, no_update, dcc
 import plotly.graph_objs as go
@@ -14,20 +13,18 @@ from flask_login import current_user
 
 chatgpt_api_key = apikeys["chatgpt"]
 
-fake = Faker()
-
-def generate_sample_accounts():
-    """Generate fake account data for non-admin users."""
-    sample_data = [
-        {
-            "id": i + 1,
-            "username": fake.user_name(),
-            "email": fake.email(),
-            "role": "User"
-        }
-        for i in range(10)
-    ]
-    return pd.DataFrame(sample_data)
+# def generate_sample_accounts():
+#     """Generate fake account data for non-admin users."""
+#     sample_data = [
+#         {
+#             "id": i + 1,
+#             "username": fake.user_name(),
+#             "email": fake.email(),
+#             "role": "User"
+#         }
+#         for i in range(10)
+#     ]
+#     return pd.DataFrame(sample_data)
 
 
 def register_callbacks(app, server):
@@ -220,11 +217,11 @@ def register_callbacks(app, server):
         Input("refresh-accounts-btn", "n_clicks")
     )
     def refresh_accounts(n_clicks):
-        """Fetch real user accounts for admins, sample data for users."""
+        """Fetch user accounts only if admin, otherwise return empty list."""
         if session.get("is_admin"):
             df = get_all_accounts()
         else:
-            df = generate_sample_accounts()
+            df = pd.DataFrame()  # No data for non-admins
 
         return df.to_dict("records") if not df.empty else []
 
