@@ -73,6 +73,7 @@ def register_callbacks(app, server):
         """Send user input to ChatGPT and update chat history."""
         with server.app_context():  # ✅ Ensure we're in Flask context
             if not session.get("user_id"):
+                logging.info(f"Chat request by user: {session.get('user_id')}")
                 return "Please log in to use chat.", []
 
             user_id = session["user_id"]
@@ -83,9 +84,13 @@ def register_callbacks(app, server):
                 )
                 bot_response = response.choices[0].message.content
 
-                chat_message = ChatMessage(user_id=user_id, user_message=user_input, bot_response=bot_response)
-                db.session.add(chat_message)
-                db.session.commit()
+                try:
+                    chat_message = ChatMessage(user_id=user_id, user_message=user_input, bot_response=bot_response)
+                    db.session.add(chat_message)
+                    db.session.commit()
+                except Exception as e:
+                    logging.error(f"Error saving chat message: {e}")
+                    return f"Chatbot error: Could not save message", []
 
                 return bot_response, get_chat_history(user_id)
             except Exception as e:
@@ -93,12 +98,19 @@ def register_callbacks(app, server):
 
     def get_chat_history(user_id):
         """Retrieve user-specific chat history from database."""
-        with server.app_context():  # ✅ Ensure we're in Flask context
-            messages = ChatMessage.query.filter_by(user_id=user_id).order_by(ChatMessage.timestamp.desc()).limit(10).all()
-            return [html.Div([
+        with server.app_context():
+            messages = ChatMessage.query.filter_by(user_id=user_id).order_by(ChatMessage.timestamp.desc()).limit(
+                10).all()
+
+        if not messages:  # ✅ If no chat history exists
+            return [html.Div("No chat history found.", className="chat-history-placeholder")]
+
+        return [
+            html.Div([
                 html.P(f"🧑‍💻 {msg.user_message}", className="chat-user"),
                 html.P(f"🤖 {msg.bot_response}", className="chat-bot")
-            ]) for msg in messages]
+            ]) for msg in messages if msg  # ✅ Prevent NoneType error
+        ]
 
     # Dark Mode Toggle
     @app.callback(

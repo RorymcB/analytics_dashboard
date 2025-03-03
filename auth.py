@@ -70,17 +70,24 @@ def register():
         email = request.form["email"]
         password = generate_password_hash(request.form["password"])
 
-        if User.query.filter_by(email=email).first():
-            return "Email already registered!"
+        # ✅ Check if email already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            flash("This email is already registered. Please log in or use another email.", "error")
+            return redirect(url_for("auth.register"))  # ✅ Redirect to registration page
 
         new_user = User(username=username, email=email, password=password, is_verified=False)
         db.session.add(new_user)
-        db.session.commit()
 
-        # Generate verification token
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Error committing new user: {e}")
+            db.session.rollback()  # ✅ Prevent database corruption
+            return "An error occurred. Please try again."
+
+        # ✅ Send email verification
         token = s.dumps(email, salt="email-confirm")
-
-        # Send verification email
         msg = Message("Confirm Your Email", recipients=[email])
         msg.body = f"Click the link to verify your email: {url_for('auth.confirm_email', token=token, _external=True)}"
         mail.send(msg)
@@ -89,18 +96,34 @@ def register():
 
     return render_template("register.html")
 
+
 @auth_bp.route("/confirm_email/<token>")
 def confirm_email(token):
     """Confirm email using a secure token."""
     try:
-        email = s.loads(token, salt="email-confirm", max_age=3600)  # 1-hour expiry
+        email = s.loads(token, salt="email-confirm", max_age=3600)  # ✅ Decode the token
+        logging.info(f"Decoded email from token: {email}")  # ✅ Debugging log
+
         user = User.query.filter_by(email=email).first()
-        if user:
-            user.is_verified = True
-            db.session.commit()
-            return "Email verified! You can now login."
+
+        if not user:
+            logging.warning(f"Email verification failed: {email} not found in database")
+            return "Invalid verification link or user does not exist.", 400
+
+        if user.is_verified:
+            return "Your email is already verified. You can log in now."
+
+        user.is_verified = True
+        db.session.commit()
+        return "Email verified successfully! You can now log in."
+
     except SignatureExpired:
-        return "The verification link has expired!"
+        return "The verification link has expired! Please request a new one.", 400
+
+    except Exception as e:
+        logging.error(f"Error verifying email: {e}")
+        return "An error occurred while verifying your email. Please try again later.", 500
+
 
 @auth_bp.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
