@@ -157,6 +157,40 @@ def get_accounts_layout():
 
         # Transaction Plots
         html.H3("📈 Transaction Data Visualizations"),
+        html.Div([
+            html.H3("📊 Interactive Transaction Chart"),
+
+            html.Label("Select Chart Type:"),
+            dcc.RadioItems(
+                id="chart-type-radio",
+                options=[
+                    {"label": "Line", "value": "line"},
+                    {"label": "Stacked Area", "value": "area"},
+                    {"label": "Stacked Bar", "value": "bar"},
+                ],
+                value="line",
+                labelStyle={"display": "inline-block", "margin-right": "15px"}
+            ),
+
+            html.Br(),
+
+            html.Label("Select Time Range:"),
+            dcc.DatePickerRange(
+                id="date-picker-range",
+                display_format="YYYY-MM-DD"
+            ),
+
+            html.Div([
+                html.Button("Last Day", id="btn-last-day", n_clicks=0),
+                html.Button("Last Week", id="btn-last-week", n_clicks=0),
+                html.Button("Last Month", id="btn-last-month", n_clicks=0),
+                html.Button("Last Year", id="btn-last-year", n_clicks=0)
+            ], style={"margin-top": "10px"}),
+
+            dcc.Graph(id="transaction-plot"),
+            dcc.Graph(id="transaction-pie")
+        ], className="plot-container"),
+
         dcc.Graph(id="line-chart"),
         dcc.Graph(id="stacked-area-chart"),
         dcc.Graph(id="stacked-bar-chart"),

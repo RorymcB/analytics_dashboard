@@ -1,12 +1,13 @@
 import logging
 import pandas as pd
-from dash import Output, Input, State, html, no_update, dcc
+from dash import Output, Input, State, html, no_update, dcc, callback_context
 import plotly.graph_objs as go
 from openai import OpenAI
 from data_fetching import fetch_stock_data, fetch_historical_stock_data, fetch_local_stock_data, get_available_stocks, get_all_accounts, get_transaction_data
-from plots import generate_line_chart, generate_stacked_area_chart, generate_stacked_bar_chart, generate_pie_chart
+from plots import generate_line_chart, generate_stacked_area_chart, generate_stacked_bar_chart, generate_pie_chart, generate_transaction_plot, generate_pie_chart_by_range
 from config import apikeys
 from database import db
+from datetime import datetime, timedelta
 from models import ChatMessage, User
 from flask import session, current_app
 from flask_login import current_user
@@ -333,4 +334,50 @@ def register_callbacks(app, server):
             generate_stacked_area_chart(),
             generate_stacked_bar_chart(),
             generate_pie_chart()
+        )
+    @app.callback(
+        Output("date-picker-range", "start_date"),
+        Output("date-picker-range", "end_date"),
+        [
+            Input("btn-last-day", "n_clicks"),
+            Input("btn-last-week", "n_clicks"),
+            Input("btn-last-month", "n_clicks"),
+            Input("btn-last-year", "n_clicks")
+        ]
+    )
+    def update_date_range(day, week, month, year):
+        ctx = callback_context
+        if not ctx.triggered:
+            return no_update, no_update
+
+        today = datetime.today()
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+        if button_id == "btn-last-day":
+            return today - timedelta(days=1), today
+        elif button_id == "btn-last-week":
+            return today - timedelta(weeks=1), today
+        elif button_id == "btn-last-month":
+            return today - timedelta(days=30), today
+        elif button_id == "btn-last-year":
+            return today - timedelta(days=365), today
+
+        return no_update, no_update
+
+    @app.callback(
+        Output("transaction-plot", "figure"),
+        Output("transaction-pie", "figure"),
+        Input("chart-type-radio", "value"),
+        Input("date-picker-range", "start_date"),
+        Input("date-picker-range", "end_date")
+    )
+    def update_transaction_charts(chart_type, start_date, end_date):
+        if start_date and end_date:
+            date_range = (pd.to_datetime(start_date), pd.to_datetime(end_date))
+        else:
+            date_range = None
+
+        return (
+            generate_transaction_plot(chart_type=chart_type, date_range=date_range),
+            generate_pie_chart_by_range(date_range)
         )
